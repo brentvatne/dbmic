@@ -1,0 +1,27 @@
+name: e2e-test-ios
+
+on:
+  push:
+    branches:
+      - 'main'
+  pull_request:
+    branches: ['*']
+
+defaults:
+  tools:
+    node: 20.18.2
+    pnpm: 9.13.1
+
+jobs:
+  build_ios_for_e2e:
+    type: build
+    params:
+      platform: ios
+      profile: e2e-test
+
+  maestro_test:
+    needs: [build_ios_for_e2e]
+    type: maestro
+    params:
+      build_id: ${{ needs.build_ios_for_e2e.outputs.build_id }}
+      flow_path: ['.maestro/home.yml']

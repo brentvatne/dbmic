@@ -9,9 +9,11 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
+      "bundleIdentifier": "com.runningtests.app",
       "supportsTablet": true
     },
     "android": {
+      "package": "com.runningtests.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -36,7 +38,14 @@
       ]
     ],
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": true,
+      "buildCacheProvider": "eas"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "371b339e-d195-401e-8027-0c308d42032c"
+      }
     }
   }
 }
