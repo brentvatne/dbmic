@@ -1,11 +1,14 @@
+#if canImport(SwiftUI)
 import SwiftUI
+#endif
 
 /// Maps dB levels to colors and labels based on configurable thresholds.
-struct LevelColors {
+public struct LevelColors {
+    #if canImport(SwiftUI)
     /// Returns a color representing the current dB level.
     /// - Parameter dB: The current level in dBFS
     /// - Parameter thresholds: The threshold configuration
-    static func color(for dB: Float, thresholds: LevelThresholds = .default) -> Color {
+    public static func color(for dB: Float, thresholds: LevelThresholds = .default) -> Color {
         if dB <= thresholds.tooQuiet {
             return .red
         } else if dB <= thresholds.quiet {
@@ -18,9 +21,10 @@ struct LevelColors {
             return .red
         }
     }
+    #endif
 
     /// Returns a human-readable label for the current level.
-    static func label(for dB: Float, thresholds: LevelThresholds = .default) -> String {
+    public static func label(for dB: Float, thresholds: LevelThresholds = .default) -> String {
         if dB <= -160 {
             return "Silent"
         } else if dB <= thresholds.tooQuiet {
@@ -37,7 +41,7 @@ struct LevelColors {
     }
 
     /// Returns an SF Symbol name for the current level.
-    static func iconName(for dB: Float, thresholds: LevelThresholds = .default) -> String {
+    public static func iconName(for dB: Float, thresholds: LevelThresholds = .default) -> String {
         if dB <= -160 {
             return "mic.slash"
         } else if dB <= thresholds.tooQuiet {
@@ -51,17 +55,24 @@ struct LevelColors {
 }
 
 /// Configurable dB thresholds for level categorization.
-struct LevelThresholds: Codable, Equatable {
+public struct LevelThresholds: Codable, Equatable {
     /// Below this is "Too Quiet" (red)
-    var tooQuiet: Float
+    public var tooQuiet: Float
     /// Below this is "Quiet" (orange), above tooQuiet
-    var quiet: Float
+    public var quiet: Float
     /// Below this is "Good" (green), above quiet
-    var good: Float
+    public var good: Float
     /// Below this is "Loud" (yellow), above good. Above this is "Clipping" (red)
-    var loud: Float
+    public var loud: Float
 
-    static let `default` = LevelThresholds(
+    public init(tooQuiet: Float, quiet: Float, good: Float, loud: Float) {
+        self.tooQuiet = tooQuiet
+        self.quiet = quiet
+        self.good = good
+        self.loud = loud
+    }
+
+    public static let `default` = LevelThresholds(
         tooQuiet: -50,
         quiet: -40,
         good: -12,

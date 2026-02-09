@@ -2,28 +2,28 @@ import Foundation
 
 /// State machine for the pre-call sound check feature.
 /// Records samples for a fixed duration, then produces a verdict.
-struct SoundCheckState {
+public struct SoundCheckState {
 
-    enum Phase {
+    public enum Phase {
         case idle
         case recording
         case done
     }
 
-    enum Verdict: Equatable {
+    public enum Verdict: Equatable {
         case pass(averageDB: Float)
         case tooQuiet(averageDB: Float)
         case tooLoud(averageDB: Float)
         case noSpeechDetected
     }
 
-    var phase: Phase = .idle
-    var duration: TimeInterval = 5.0
-    var startTime: Date?
-    var verdict: Verdict?
+    public var phase: Phase = .idle
+    public var duration: TimeInterval = 5.0
+    public var startTime: Date?
+    public var verdict: Verdict?
 
     /// Progress from 0 to 1 during recording.
-    var progress: Double {
+    public var progress: Double {
         guard phase == .recording, let start = startTime else { return 0 }
         return min(Date().timeIntervalSince(start) / duration, 1.0)
     }
@@ -33,7 +33,9 @@ struct SoundCheckState {
     private var totalSamples = 0
     private var peakSample: Float = -160.0
 
-    mutating func start() {
+    public init() {}
+
+    public mutating func start() {
         phase = .recording
         startTime = Date()
         verdict = nil
@@ -42,7 +44,7 @@ struct SoundCheckState {
         peakSample = -160.0
     }
 
-    mutating func addSample(_ dB: Float, silenceFloor: Float) {
+    public mutating func addSample(_ dB: Float, silenceFloor: Float) {
         guard phase == .recording else { return }
         totalSamples += 1
         if dB > peakSample { peakSample = dB }
@@ -52,7 +54,7 @@ struct SoundCheckState {
         }
     }
 
-    mutating func finish() {
+    public mutating func finish() {
         guard phase == .recording else { return }
         phase = .done
 
@@ -77,7 +79,7 @@ struct SoundCheckState {
         }
     }
 
-    mutating func reset() {
+    public mutating func reset() {
         self = SoundCheckState()
     }
 }

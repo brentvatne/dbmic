@@ -1,4 +1,5 @@
 import SwiftUI
+import MicMeterCore
 
 /// The popover shown when clicking the menu bar item.
 /// Displays a detailed level meter, device info, and controls.
@@ -135,14 +136,25 @@ struct PopoverView: View {
     }
 
     private var deviceSection: some View {
-        HStack {
-            Image(systemName: "mic")
-                .foregroundColor(.secondary)
-            Text(monitor.inputDeviceName)
-                .font(.system(size: 12))
-                .lineLimit(1)
-                .truncationMode(.tail)
-            Spacer()
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Image(systemName: "mic")
+                    .foregroundColor(.secondary)
+                Text(monitor.inputDeviceName)
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer()
+            }
+            if let error = monitor.lastError {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 9))
+                    Text(error)
+                        .font(.system(size: 10))
+                }
+                .foregroundColor(.red)
+            }
         }
     }
 

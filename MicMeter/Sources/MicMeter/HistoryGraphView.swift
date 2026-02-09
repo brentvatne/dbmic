@@ -1,4 +1,5 @@
 import SwiftUI
+import MicMeterCore
 
 /// A sparkline graph showing the last 60 seconds of audio levels.
 struct HistoryGraphView: View {
@@ -28,7 +29,7 @@ struct HistoryGraphView: View {
             }
 
             GeometryReader { geo in
-                ZStack(alignment: .bottomLeading) {
+                ZStack(alignment: .topLeading) {
                     // Background
                     RoundedRectangle(cornerRadius: 4)
                         .fill(Color.primary.opacity(0.05))

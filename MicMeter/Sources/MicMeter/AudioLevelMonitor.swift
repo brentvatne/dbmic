@@ -2,6 +2,7 @@ import AVFoundation
 import Accelerate
 import Combine
 import CoreAudio
+import MicMeterCore
 
 /// Monitors the system audio input device and publishes real-time dB levels.
 final class AudioLevelMonitor: ObservableObject {
@@ -13,6 +14,7 @@ final class AudioLevelMonitor: ObservableObject {
     @Published var inputDeviceName: String = "Unknown"
     @Published var isMonitoring: Bool = false
     @Published var permissionGranted: Bool = false
+    @Published var lastError: String?
 
     /// True when audio level is above the silence floor (voice activity detected).
     @Published var isSpeaking: Bool = false
@@ -20,8 +22,10 @@ final class AudioLevelMonitor: ObservableObject {
     /// Rolling history of dB levels for the last 60 seconds, sampled ~2x/sec.
     @Published var levelHistory: [Float] = []
 
-    /// Sound check state.
-    @Published var soundCheck = SoundCheckState()
+    /// Sound check — only phase and verdict are @Published to avoid per-sample copy overhead.
+    @Published var soundCheckPhase: SoundCheckState.Phase = .idle
+    @Published var soundCheckVerdict: SoundCheckState.Verdict?
+    @Published var soundCheckStartTime: Date?
 
     // MARK: - Private
 
@@ -48,6 +52,17 @@ final class AudioLevelMonitor: ObservableObject {
     private var historyTimer: Timer?
     private let historyMaxSamples = 120  // 60 seconds at 2 samples/sec
 
+    /// Sound check sample accumulation (non-published to avoid copy+objectWillChange spam).
+    private var soundCheckState = SoundCheckState()
+    private var soundCheckTimer: DispatchWorkItem?
+
+    /// Throttle: only dispatch to main thread at this interval (~12 Hz).
+    private var lastMainDispatchTime: CFAbsoluteTime = 0
+    private let mainDispatchInterval: CFAbsoluteTime = 0.08
+
+    /// Device change debounce.
+    private var deviceChangeWorkItem: DispatchWorkItem?
+
     // MARK: - Lifecycle
 
     init() {
@@ -55,7 +70,14 @@ final class AudioLevelMonitor: ObservableObject {
     }
 
     deinit {
-        stopMonitoring()
+        // Synchronous cleanup only — no async dispatches that capture self
+        if isMonitoring {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            audioEngine.stop()
+            historyTimer?.invalidate()
+        }
+        soundCheckTimer?.cancel()
+        deviceChangeWorkItem?.cancel()
         removeDeviceChangeListener()
     }
 
@@ -64,20 +86,20 @@ final class AudioLevelMonitor: ObservableObject {
     func requestPermission(completion: @escaping (Bool) -> Void) {
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
         case .authorized:
-            DispatchQueue.main.async {
-                self.permissionGranted = true
+            DispatchQueue.main.async { [weak self] in
+                self?.permissionGranted = true
                 completion(true)
             }
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .audio) { granted in
-                DispatchQueue.main.async {
-                    self.permissionGranted = granted
+                DispatchQueue.main.async { [weak self] in
+                    self?.permissionGranted = granted
                     completion(granted)
                 }
             }
         default:
-            DispatchQueue.main.async {
-                self.permissionGranted = false
+            DispatchQueue.main.async { [weak self] in
+                self?.permissionGranted = false
                 completion(false)
             }
         }
@@ -89,10 +111,20 @@ final class AudioLevelMonitor: ObservableObject {
         guard !isMonitoring else { return }
 
         audioEngine = AVAudioEngine()
+
+        // Guard against no input device — accessing inputNode throws an ObjC exception
+        // (not catchable in Swift) on Macs with no built-in mic and no connected device.
+        guard hasAudioInputDevice() else {
+            lastError = "No audio input device found"
+            inputDeviceName = "No Input"
+            return
+        }
+
         let inputNode = audioEngine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
 
         guard format.sampleRate > 0, format.channelCount > 0 else {
+            lastError = "Invalid audio format"
             return
         }
 
@@ -102,14 +134,17 @@ final class AudioLevelMonitor: ObservableObject {
 
         do {
             try audioEngine.start()
-            DispatchQueue.main.async {
-                self.isMonitoring = true
-                self.startHistoryTimer()
-            }
+            // Set state synchronously — avoids race where restartMonitoring()
+            // calls stop before the async block sets isMonitoring = true
+            isMonitoring = true
+            lastError = nil
+            startHistoryTimer()
             installDeviceChangeListener()
             updateInputDeviceName()
         } catch {
-            print("Failed to start audio engine: \(error)")
+            // Clean up the tap we just installed
+            inputNode.removeTap(onBus: 0)
+            lastError = "Failed to start audio: \(error.localizedDescription)"
         }
     }
 
@@ -119,18 +154,17 @@ final class AudioLevelMonitor: ObservableObject {
         audioEngine.stop()
         historyTimer?.invalidate()
         historyTimer = nil
-        DispatchQueue.main.async {
-            self.isMonitoring = false
-            self.isSpeaking = false
-            self.decibelLevel = -160.0
-            self.peakLevel = -160.0
-            self.currentSmoothedLevel = -160.0
-        }
+        // Set state synchronously to match startMonitoring
+        isMonitoring = false
+        isSpeaking = false
+        decibelLevel = -160.0
+        peakLevel = -160.0
+        currentSmoothedLevel = -160.0
     }
 
     func restartMonitoring() {
         stopMonitoring()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
             self?.startMonitoring()
         }
     }
@@ -151,6 +185,16 @@ final class AudioLevelMonitor: ObservableObject {
 
         // Clamp to reasonable range
         let clampedDB = max(min(dB, 0.0), -160.0)
+
+        // Feed sound check samples directly (no @Published overhead)
+        if soundCheckState.phase == .recording {
+            soundCheckState.addSample(clampedDB, silenceFloor: silenceFloor)
+        }
+
+        // Throttle main-thread dispatches to ~12 Hz
+        let now = CFAbsoluteTimeGetCurrent()
+        guard now - lastMainDispatchTime >= mainDispatchInterval else { return }
+        lastMainDispatchTime = now
 
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
@@ -176,11 +220,6 @@ final class AudioLevelMonitor: ObservableObject {
 
             // Accumulate samples for history
             self.historySamples.append(self.currentSmoothedLevel)
-
-            // Feed sound check if active
-            if self.soundCheck.phase == .recording {
-                self.soundCheck.addSample(self.currentSmoothedLevel, silenceFloor: self.silenceFloor)
-            }
         }
     }
 
@@ -216,20 +255,55 @@ final class AudioLevelMonitor: ObservableObject {
     // MARK: - Sound Check
 
     func startSoundCheck() {
-        soundCheck = SoundCheckState()
-        soundCheck.start()
-        // Auto-stop after the duration
-        DispatchQueue.main.asyncAfter(deadline: .now() + soundCheck.duration) { [weak self] in
+        soundCheckTimer?.cancel()
+
+        soundCheckState = SoundCheckState()
+        soundCheckState.start()
+
+        // Publish lightweight state only
+        soundCheckPhase = .recording
+        soundCheckVerdict = nil
+        soundCheckStartTime = soundCheckState.startTime
+
+        let workItem = DispatchWorkItem { [weak self] in
             self?.finishSoundCheck()
         }
+        soundCheckTimer = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + soundCheckState.duration, execute: workItem)
     }
 
     private func finishSoundCheck() {
-        guard soundCheck.phase == .recording else { return }
-        soundCheck.finish()
+        guard soundCheckState.phase == .recording else { return }
+        soundCheckState.finish()
+        soundCheckPhase = .done
+        soundCheckVerdict = soundCheckState.verdict
+    }
+
+    func resetSoundCheck() {
+        soundCheckTimer?.cancel()
+        soundCheckState = SoundCheckState()
+        soundCheckPhase = .idle
+        soundCheckVerdict = nil
+        soundCheckStartTime = nil
     }
 
     // MARK: - Device Management
+
+    /// Check if any audio input device is available before accessing inputNode.
+    private func hasAudioInputDevice() -> Bool {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var deviceID = AudioDeviceID(0)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        let status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address, 0, nil, &size, &deviceID
+        )
+        return status == noErr && deviceID != 0
+    }
 
     func updateInputDeviceName() {
         var deviceID = AudioDeviceID(0)
@@ -249,11 +323,12 @@ final class AudioLevelMonitor: ObservableObject {
         )
 
         guard status == noErr else {
-            DispatchQueue.main.async { self.inputDeviceName = "No Input" }
+            DispatchQueue.main.async { [weak self] in
+                self?.inputDeviceName = "No Input"
+            }
             return
         }
 
-        // Get device name
         var nameAddress = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyDeviceNameCFString,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -271,8 +346,8 @@ final class AudioLevelMonitor: ObservableObject {
         )
 
         let deviceName = nameStatus == noErr ? name as String : "Unknown Device"
-        DispatchQueue.main.async {
-            self.inputDeviceName = deviceName
+        DispatchQueue.main.async { [weak self] in
+            self?.inputDeviceName = deviceName
         }
     }
 
@@ -302,6 +377,22 @@ final class AudioLevelMonitor: ObservableObject {
         )
         deviceListenerInstalled = false
     }
+
+    /// Called from device change callback. Debounces rapid notifications from CoreAudio.
+    fileprivate func handleDeviceChange() {
+        deviceChangeWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            self.updateInputDeviceName()
+            // Reset sound check if in progress — mixed-device samples are useless
+            if self.soundCheckState.phase == .recording {
+                self.resetSoundCheck()
+            }
+            self.restartMonitoring()
+        }
+        deviceChangeWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: workItem)
+    }
 }
 
 // Core Audio C-function callback for device changes
@@ -313,11 +404,6 @@ private func deviceChangeCallback(
 ) -> OSStatus {
     guard let clientData = clientData else { return noErr }
     let monitor = Unmanaged<AudioLevelMonitor>.fromOpaque(clientData).takeUnretainedValue()
-
-    DispatchQueue.main.async {
-        monitor.updateInputDeviceName()
-        monitor.restartMonitoring()
-    }
-
+    monitor.handleDeviceChange()
     return noErr
 }

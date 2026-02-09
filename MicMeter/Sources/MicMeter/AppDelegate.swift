@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -8,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let monitor = AudioLevelMonitor()
     private var hostingView: NSHostingView<MenuBarView>!
     private var eventMonitor: Any?
+    private var resizeCancellable: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
@@ -26,17 +28,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menuBarView = MenuBarView(monitor: monitor)
         hostingView = NSHostingView(rootView: menuBarView)
 
-        // Calculate initial size
         let fittingSize = hostingView.fittingSize
         hostingView.frame = NSRect(x: 0, y: 0, width: fittingSize.width, height: button.bounds.height)
 
         button.addSubview(hostingView)
         button.frame = hostingView.frame
 
-        // Set up a timer to resize the button as the dB text changes width
-        Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            self?.updateStatusItemSize()
-        }
+        // Resize only when the displayed content actually changes
+        resizeCancellable = monitor.$decibelLevel
+            .combineLatest(monitor.$isMonitoring, monitor.$isSpeaking)
+            .throttle(for: .milliseconds(100), scheduler: DispatchQueue.main, latest: true)
+            .sink { [weak self] _ in
+                self?.updateStatusItemSize()
+            }
 
         button.action = #selector(togglePopover(_:))
         button.target = self
@@ -45,7 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateStatusItemSize() {
         guard let button = statusItem.button else { return }
         let fittingSize = hostingView.fittingSize
-        let newWidth = max(fittingSize.width + 4, 36) // min width
+        let newWidth = max(fittingSize.width + 4, 36)
         hostingView.frame = NSRect(x: 0, y: 0, width: newWidth, height: button.bounds.height)
         statusItem.length = newWidth
     }
@@ -54,7 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupPopover() {
         popover = NSPopover()
-        popover.contentSize = NSSize(width: 280, height: 340)
+        popover.contentSize = NSSize(width: 280, height: 400)
         popover.behavior = .transient
         popover.animates = true
 
@@ -69,15 +73,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             popover.performClose(sender)
         } else {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-
-            // Ensure popover window becomes key for interaction
             popover.contentViewController?.view.window?.makeKey()
         }
     }
 
     // MARK: - Event Monitor
 
-    /// Closes the popover when clicking outside of it.
     private func setupEventMonitor() {
         eventMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.leftMouseDown, .rightMouseDown]

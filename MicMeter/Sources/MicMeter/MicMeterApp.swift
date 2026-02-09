@@ -5,11 +5,14 @@ struct MicMeterApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        // No main window — this is a menu-bar-only app.
-        // Settings scene is provided for the standard Cmd+, shortcut,
-        // but the primary settings UI is in the popover.
+        // No visible scenes — this is a menu-bar-only app.
+        // All UI is in the NSStatusItem popover managed by AppDelegate.
         Settings {
             EmptyView()
+        }
+        .commands {
+            // Suppress Cmd+, which would open an empty settings window
+            CommandGroup(replacing: .appSettings) { }
         }
     }
 }

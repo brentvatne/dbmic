@@ -1,4 +1,5 @@
 import SwiftUI
+import MicMeterCore
 
 /// The view rendered directly in the macOS menu bar via NSHostingView.
 /// Shows the current dB level as colored text.

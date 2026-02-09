@@ -1,4 +1,5 @@
 import SwiftUI
+import MicMeterCore
 
 /// Pre-call sound check UI. Asks the user to speak for 5 seconds, then gives a verdict.
 struct SoundCheckView: View {
@@ -8,7 +9,7 @@ struct SoundCheckView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            switch monitor.soundCheck.phase {
+            switch monitor.soundCheckPhase {
             case .idle:
                 idleView
             case .recording:
@@ -19,6 +20,10 @@ struct SoundCheckView: View {
         }
         .padding(16)
         .frame(width: 280)
+        .onDisappear {
+            progressTimer?.invalidate()
+            progressTimer = nil
+        }
     }
 
     // MARK: - Phases
@@ -50,7 +55,6 @@ struct SoundCheckView: View {
 
     private var recordingView: some View {
         VStack(spacing: 12) {
-            // Animated mic icon
             Image(systemName: "mic.circle.fill")
                 .font(.system(size: 36))
                 .foregroundColor(.red)
@@ -63,12 +67,10 @@ struct SoundCheckView: View {
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
-            // Live level during test
             Text(String(format: "%.0f dBFS", monitor.decibelLevel))
                 .font(.system(size: 24, weight: .bold, design: .monospaced))
                 .foregroundColor(monitor.isSpeaking ? .green : .secondary)
 
-            // Progress bar
             ProgressView(value: animatedProgress)
                 .progressViewStyle(.linear)
                 .tint(.red)
@@ -81,12 +83,12 @@ struct SoundCheckView: View {
 
     private var resultView: some View {
         VStack(spacing: 12) {
-            if let verdict = monitor.soundCheck.verdict {
+            if let verdict = monitor.soundCheckVerdict {
                 verdictView(verdict)
             }
 
             Button(action: {
-                monitor.soundCheck.reset()
+                monitor.resetSoundCheck()
                 animatedProgress = 0
             }) {
                 Label("Test Again", systemImage: "arrow.counterclockwise")
@@ -163,10 +165,14 @@ struct SoundCheckView: View {
     private func startProgressAnimation() {
         animatedProgress = 0
         progressTimer?.invalidate()
-        progressTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { timer in
-            let elapsed = Date().timeIntervalSince(monitor.soundCheck.startTime ?? Date())
-            animatedProgress = min(elapsed / monitor.soundCheck.duration, 1.0)
-            if monitor.soundCheck.phase != .recording {
+        progressTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak monitor] timer in
+            guard let monitor = monitor else {
+                timer.invalidate()
+                return
+            }
+            let elapsed = Date().timeIntervalSince(monitor.soundCheckStartTime ?? Date())
+            animatedProgress = min(elapsed / 5.0, 1.0)
+            if monitor.soundCheckPhase != .recording {
                 timer.invalidate()
                 animatedProgress = 1.0
             }
