@@ -1,50 +1,90 @@
-# Welcome to your Expo app 👋
+# MicMeter
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A macOS menu bar app that shows the real-time decibel level of your system audio input (microphone). Built for people who frequently get told "you're too quiet" on calls.
 
-## Get started
+## Features
 
-1. Install dependencies
+- **Live dB display in menu bar** — always visible, color-coded (red = too quiet/clipping, orange = quiet, green = good, yellow = loud)
+- **Detailed popover** — click for a larger level meter with peak indicator, device info, and controls
+- **Auto-detects input device changes** — seamlessly switches when you plug in a different mic or change system input
+- **Configurable thresholds** — adjust the dB ranges for each color zone to match your mic and preferences
+- **Launch at Login** — optional, via macOS native `SMAppService`
+- **Menu-bar-only** — no Dock icon, no window, just the info you need
 
-   ```bash
-   npm install
-   ```
+## Screenshot
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```
+Menu bar:  [mic.fill -28]     ← green, good level
+           [mic     -52]     ← red, too quiet!
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Requirements
 
-## Learn more
+- macOS 13 (Ventura) or later
+- Microphone permission
 
-To learn more about developing your project with Expo, look at the following resources:
+## Building
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Open the project in Xcode or build from the command line:
 
-## Join the community
+```bash
+cd MicMeter
+swift build
+```
 
-Join our community of developers creating universal apps.
+To run:
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+swift run
+# or open in Xcode and hit Run
+```
+
+For a release build:
+
+```bash
+swift build -c release
+```
+
+The built binary will be in `.build/release/MicMeter`.
+
+## How It Works
+
+1. **AVAudioEngine** installs a tap on the system's default audio input node
+2. Each audio buffer is processed using **Accelerate** (`vDSP_rmsqv`) for efficient RMS calculation
+3. RMS is converted to **dBFS** (decibels relative to full scale): `20 * log10(rms)`
+4. An exponential moving average smooths the readings
+5. The level is displayed in the menu bar via **NSStatusItem** with an **NSHostingView** wrapping a SwiftUI view
+6. **Core Audio** listeners detect when the default input device changes and automatically restart monitoring
+
+## dB Ranges (defaults, configurable)
+
+| Range | Color | Meaning |
+|-------|-------|---------|
+| Below -50 dBFS | Red | Too quiet — turn up your mic gain |
+| -50 to -40 dBFS | Orange | Quiet — might want to speak up or adjust gain |
+| -40 to -12 dBFS | Green | Good — you sound great |
+| -12 to -3 dBFS | Yellow | Loud — getting hot |
+| Above -3 dBFS | Red | Clipping risk — turn it down |
+
+## Project Structure
+
+```
+MicMeter/
+├── Package.swift
+├── Sources/MicMeter/
+│   ├── MicMeterApp.swift          # App entry point
+│   ├── AppDelegate.swift          # NSStatusItem + popover management
+│   ├── AudioLevelMonitor.swift    # AVAudioEngine + Accelerate audio processing
+│   ├── LevelColors.swift          # dB → color/label mapping + thresholds
+│   ├── MenuBarView.swift          # SwiftUI view rendered in menu bar
+│   ├── PopoverView.swift          # Detailed level meter popover
+│   ├── PermissionView.swift       # Microphone permission request UI
+│   ├── SettingsView.swift         # Threshold + launch-at-login settings
+│   ├── Info.plist                 # LSUIElement, mic usage description
+│   └── MicMeter.entitlements      # Audio input entitlement
+└── Resources/
+```
+
+## License
+
+MIT

@@ -1,6 +1,0 @@
-appId: com.runningtests.app
----
-- launchApp
-- assertVisible: 'Hello'
-- tapOn: 'Reveal next word'
-- assertVisible: 'World'
