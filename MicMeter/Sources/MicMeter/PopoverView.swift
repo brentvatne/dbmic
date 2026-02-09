@@ -10,6 +10,7 @@ struct PopoverView: View {
     @AppStorage("loudThreshold") var loudThreshold: Double = -3
 
     @State private var showingSettings = false
+    @State private var showingSoundCheck = false
 
     var thresholds: LevelThresholds {
         LevelThresholds(
@@ -30,6 +31,14 @@ struct PopoverView: View {
             // Level meter
             levelMeterSection
                 .padding(.vertical, 12)
+                .padding(.horizontal, 16)
+
+            Divider()
+
+            // History graph
+            HistoryGraphView(history: monitor.levelHistory, thresholds: thresholds)
+                .frame(height: 70)
+                .padding(.vertical, 8)
                 .padding(.horizontal, 16)
 
             Divider()
@@ -56,10 +65,16 @@ struct PopoverView: View {
             Text("MicMeter")
                 .font(.headline)
             Spacer()
-            Text(LevelColors.label(for: monitor.decibelLevel, thresholds: thresholds))
-                .font(.subheadline)
-                .foregroundColor(LevelColors.color(for: monitor.decibelLevel, thresholds: thresholds))
-                .fontWeight(.semibold)
+            if monitor.isSpeaking {
+                Text(LevelColors.label(for: monitor.decibelLevel, thresholds: thresholds))
+                    .font(.subheadline)
+                    .foregroundColor(LevelColors.color(for: monitor.decibelLevel, thresholds: thresholds))
+                    .fontWeight(.semibold)
+            } else if monitor.isMonitoring {
+                Text("Silent")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -71,7 +86,11 @@ struct PopoverView: View {
             HStack(alignment: .firstTextBaseline, spacing: 2) {
                 Text(formattedDB)
                     .font(.system(size: 42, weight: .bold, design: .monospaced))
-                    .foregroundColor(LevelColors.color(for: monitor.decibelLevel, thresholds: thresholds))
+                    .foregroundColor(
+                        monitor.isSpeaking
+                            ? LevelColors.color(for: monitor.decibelLevel, thresholds: thresholds)
+                            : .secondary
+                    )
                 Text("dBFS")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.secondary)
@@ -105,6 +124,11 @@ struct PopoverView: View {
                 Text(String(format: "%.1f dBFS", monitor.peakLevel))
                     .foregroundColor(LevelColors.color(for: monitor.peakLevel, thresholds: thresholds))
                 Spacer()
+                if monitor.isSpeaking {
+                    Text("Speaking")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.green)
+                }
             }
             .font(.system(size: 11))
         }
@@ -137,6 +161,16 @@ struct PopoverView: View {
                 )
             }
             .buttonStyle(.borderless)
+
+            Spacer()
+
+            Button(action: { showingSoundCheck.toggle() }) {
+                Label("Sound Check", systemImage: "waveform")
+            }
+            .buttonStyle(.borderless)
+            .popover(isPresented: $showingSoundCheck) {
+                SoundCheckView(monitor: monitor)
+            }
 
             Spacer()
 

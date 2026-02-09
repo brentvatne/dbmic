@@ -14,6 +14,15 @@ final class AudioLevelMonitor: ObservableObject {
     @Published var isMonitoring: Bool = false
     @Published var permissionGranted: Bool = false
 
+    /// True when audio level is above the silence floor (voice activity detected).
+    @Published var isSpeaking: Bool = false
+
+    /// Rolling history of dB levels for the last 60 seconds, sampled ~2x/sec.
+    @Published var levelHistory: [Float] = []
+
+    /// Sound check state.
+    @Published var soundCheck = SoundCheckState()
+
     // MARK: - Private
 
     private var audioEngine = AVAudioEngine()
@@ -27,9 +36,17 @@ final class AudioLevelMonitor: ObservableObject {
     /// Exponential moving average coefficient (0..1). Higher = more responsive, lower = smoother.
     var smoothingFactor: Float = 0.3
 
+    /// dB level above which we consider the user to be speaking (not silence).
+    var silenceFloor: Float = -55.0
+
     /// Peak hold decay rate in dB per update cycle.
     private let peakDecayRate: Float = 0.5
     private var currentSmoothedLevel: Float = -160.0
+
+    /// History sampling: accumulates dB values between history ticks.
+    private var historySamples: [Float] = []
+    private var historyTimer: Timer?
+    private let historyMaxSamples = 120  // 60 seconds at 2 samples/sec
 
     // MARK: - Lifecycle
 
@@ -87,6 +104,7 @@ final class AudioLevelMonitor: ObservableObject {
             try audioEngine.start()
             DispatchQueue.main.async {
                 self.isMonitoring = true
+                self.startHistoryTimer()
             }
             installDeviceChangeListener()
             updateInputDeviceName()
@@ -99,8 +117,11 @@ final class AudioLevelMonitor: ObservableObject {
         guard isMonitoring else { return }
         audioEngine.inputNode.removeTap(onBus: 0)
         audioEngine.stop()
+        historyTimer?.invalidate()
+        historyTimer = nil
         DispatchQueue.main.async {
             self.isMonitoring = false
+            self.isSpeaking = false
             self.decibelLevel = -160.0
             self.peakLevel = -160.0
             self.currentSmoothedLevel = -160.0
@@ -149,12 +170,68 @@ final class AudioLevelMonitor: ObservableObject {
             } else {
                 self.peakLevel = max(self.peakLevel - self.peakDecayRate, clampedDB)
             }
+
+            // Voice activity detection
+            self.isSpeaking = self.currentSmoothedLevel > self.silenceFloor
+
+            // Accumulate samples for history
+            self.historySamples.append(self.currentSmoothedLevel)
+
+            // Feed sound check if active
+            if self.soundCheck.phase == .recording {
+                self.soundCheck.addSample(self.currentSmoothedLevel, silenceFloor: self.silenceFloor)
+            }
         }
+    }
+
+    // MARK: - History
+
+    private func startHistoryTimer() {
+        historyTimer?.invalidate()
+        historyTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            self?.tickHistory()
+        }
+        historyTimer?.tolerance = 0.05
+    }
+
+    private func tickHistory() {
+        guard !historySamples.isEmpty else {
+            levelHistory.append(currentSmoothedLevel)
+            trimHistory()
+            return
+        }
+        // Average the accumulated samples for this tick
+        let avg = historySamples.reduce(0, +) / Float(historySamples.count)
+        historySamples.removeAll()
+        levelHistory.append(avg)
+        trimHistory()
+    }
+
+    private func trimHistory() {
+        if levelHistory.count > historyMaxSamples {
+            levelHistory.removeFirst(levelHistory.count - historyMaxSamples)
+        }
+    }
+
+    // MARK: - Sound Check
+
+    func startSoundCheck() {
+        soundCheck = SoundCheckState()
+        soundCheck.start()
+        // Auto-stop after the duration
+        DispatchQueue.main.asyncAfter(deadline: .now() + soundCheck.duration) { [weak self] in
+            self?.finishSoundCheck()
+        }
+    }
+
+    private func finishSoundCheck() {
+        guard soundCheck.phase == .recording else { return }
+        soundCheck.finish()
     }
 
     // MARK: - Device Management
 
-    private func updateInputDeviceName() {
+    func updateInputDeviceName() {
         var deviceID = AudioDeviceID(0)
         var size = UInt32(MemoryLayout<AudioDeviceID>.size)
         var address = AudioObjectPropertyAddress(
