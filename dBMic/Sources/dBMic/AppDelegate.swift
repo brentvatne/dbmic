@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let monitor = AudioLevelMonitor()
     private var hostingView: NSHostingView<MenuBarView>!
     private var eventMonitor: Any?
+    private var rightClickMonitor: Any?
     private var statusCancellable: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -20,17 +21,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApplication.shared.setActivationPolicy(.accessory)
 
         setupStatusItem()
-        if let button = statusItem.button {
-            NSLog("[dBMic] button frame=%@, bounds=%@",
-                  NSStringFromRect(button.frame), NSStringFromRect(button.bounds))
-            NSLog("[dBMic] hostingView frame=%@", NSStringFromRect(hostingView.frame))
-            NSLog("[dBMic] button subviews=%@", String(describing: button.subviews))
-        } else {
-            NSLog("[dBMic] WARNING: statusItem.button is nil")
-        }
         setupPopover()
         setupEventMonitor()
+        setupRightClickMenu()
         requestPermissionAndStart()
+
+        // Close any windows macOS restored (the empty Settings scene window).
+        // Dispatched async so it runs after SwiftUI finishes creating its scenes.
+        DispatchQueue.main.async {
+            for window in NSApplication.shared.windows {
+                window.close()
+            }
+        }
+
         NSLog("[dBMic] startup complete, isMonitoring=%d, permissionGranted=%d",
               monitor.isMonitoring, monitor.permissionGranted)
     }
@@ -73,6 +76,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
         }
+    }
+
+    // MARK: - Right-Click Menu
+
+    private func setupRightClickMenu() {
+        // Monitor for right-clicks on the status item: temporarily attach an
+        // NSMenu so AppKit shows it, then remove it so left-click still fires
+        // the button action (togglePopover).
+        rightClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown]) { [weak self] event in
+            guard let self,
+                  let button = self.statusItem.button,
+                  event.window == button.window else { return event }
+
+            let locationInButton = button.convert(event.locationInWindow, from: nil)
+            guard button.bounds.contains(locationInButton) else { return event }
+
+            let menu = NSMenu()
+            menu.addItem(NSMenuItem(title: "Quit dBMic", action: #selector(self.quitApp), keyEquivalent: "q"))
+            menu.items.forEach { $0.target = self }
+            self.statusItem.menu = menu
+            button.performClick(nil)
+            self.statusItem.menu = nil
+            return nil
+        }
+    }
+
+    @objc private func quitApp() {
+        NSApplication.shared.terminate(nil)
     }
 
     // MARK: - Event Monitor
