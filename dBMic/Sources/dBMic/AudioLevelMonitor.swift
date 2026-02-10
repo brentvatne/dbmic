@@ -169,6 +169,10 @@ final class AudioLevelMonitor: ObservableObject {
         currentSmoothedLevel = -160.0
     }
 
+    func resetPeak() {
+        peakLevel = -160.0
+    }
+
     func restartMonitoring() {
         stopMonitoring()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in

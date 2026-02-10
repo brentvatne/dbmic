@@ -148,11 +148,16 @@ struct PopoverView: View {
             HStack {
                 Text("Peak:")
                     .foregroundColor(.secondary)
-                levelPill(
-                    String(format: "%.1f dBFS", monitor.peakLevel),
-                    color: LevelColors.color(for: monitor.peakLevel, thresholds: thresholds),
-                    fixedWidth: 72
-                )
+                Button {
+                    monitor.resetPeak()
+                } label: {
+                    levelPill(
+                        String(format: "%.1f dBFS", monitor.peakLevel),
+                        color: LevelColors.color(for: monitor.peakLevel, thresholds: thresholds),
+                        fixedWidth: 72
+                    )
+                }
+                .buttonStyle(.borderless)
                 Button {
                     showingPeakInfo.toggle()
                 } label: {
