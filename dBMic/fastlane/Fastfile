@@ -161,13 +161,37 @@ def notarize_app
 
   sh("cd '#{File.dirname(app_bundle)}' && zip -r '#{zip_path}' '#{APP_NAME}.app'")
 
-  sh(
+  require "json"
+
+  UI.message("Submitting #{zip_path} for notarization...")
+  submit_out = sh(
     "xcrun notarytool submit '#{zip_path}' " \
     "--apple-id '#{ENV['APPLE_ID']}' " \
     "--password '#{ENV['APPLE_ID_PASSWORD']}' " \
     "--team-id '#{ENV['APPLE_TEAM_ID']}' " \
-    "--wait"
+    "--output-format json",
+    log: false
   )
+  submission_id = JSON.parse(submit_out)["id"]
+  UI.message("Submission ID: #{submission_id}")
+
+  status = nil
+  80.times do |i|
+    sleep(15)
+    info_out = sh(
+      "xcrun notarytool info '#{submission_id}' " \
+      "--apple-id '#{ENV['APPLE_ID']}' " \
+      "--password '#{ENV['APPLE_ID_PASSWORD']}' " \
+      "--team-id '#{ENV['APPLE_TEAM_ID']}' " \
+      "--output-format json",
+      log: false
+    )
+    status = JSON.parse(info_out)["status"]
+    UI.message("[#{i + 1}/80] Status: #{status}")
+    break if status == "Accepted"
+    UI.user_error!("Notarization failed") if status == "Invalid"
+  end
+  UI.user_error!("Notarization timed out") unless status == "Accepted"
 
   sh("xcrun stapler staple '#{app_bundle}'")
   FileUtils.rm_f(zip_path)

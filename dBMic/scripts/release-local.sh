@@ -18,11 +18,23 @@ echo "==> Building and signing..."
 echo "==> Notarizing..."
 cd build
 zip -r dBMic-notarize.zip dBMic.app
-xcrun notarytool submit dBMic-notarize.zip \
-    --apple-id "$APPLE_ID" \
-    --password "$APPLE_ID_PASSWORD" \
-    --team-id "$APPLE_TEAM_ID" \
-    --wait
+SUBMIT_OUT=$(xcrun notarytool submit dBMic-notarize.zip \
+    --apple-id "$APPLE_ID" --password "$APPLE_ID_PASSWORD" \
+    --team-id "$APPLE_TEAM_ID" --output-format json)
+SUBMISSION_ID=$(echo "$SUBMIT_OUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+echo "    Submission ID: $SUBMISSION_ID"
+
+for i in $(seq 1 80); do
+    sleep 15
+    INFO=$(xcrun notarytool info "$SUBMISSION_ID" \
+        --apple-id "$APPLE_ID" --password "$APPLE_ID_PASSWORD" \
+        --team-id "$APPLE_TEAM_ID" --output-format json)
+    STATUS=$(echo "$INFO" | python3 -c "import sys,json; print(json.load(sys.stdin)['status'])")
+    echo "    [$i/80] Status: $STATUS"
+    if [[ "$STATUS" == "Accepted" ]]; then break; fi
+    if [[ "$STATUS" == "Invalid" ]]; then echo "Notarization failed"; exit 1; fi
+done
+if [[ "$STATUS" != "Accepted" ]]; then echo "Notarization timed out"; exit 1; fi
 rm dBMic-notarize.zip
 
 echo "==> Stapling..."
