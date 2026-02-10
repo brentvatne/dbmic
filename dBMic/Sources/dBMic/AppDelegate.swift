@@ -30,7 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let button = statusItem.button else { return }
 
         let menuBarView = MenuBarView(monitor: monitor)
-        hostingView = NSHostingView(rootView: menuBarView)
+        hostingView = PassthroughHostingView(rootView: menuBarView)
         hostingView.frame = NSRect(x: 0, y: 0, width: 24, height: button.bounds.height)
 
         button.addSubview(hostingView)
@@ -111,6 +111,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
     }
+}
+
+/// NSHostingView subclass that passes all mouse events through to the
+/// superview (the status item button), so the button action still fires.
+final class PassthroughHostingView<Content: View>: NSHostingView<Content> {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 /// Wrapper that decides between showing the permission view or the main popover.

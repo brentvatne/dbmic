@@ -31,8 +31,15 @@ final class AudioLevelMonitor: ObservableObject {
 
     private var audioEngine = AVAudioEngine()
     private var deviceListenerInstalled = false
-    private var propertyAddress = AudioObjectPropertyAddress(
+    private var deviceListListenerInstalled = false
+    private var configChangeObserver: NSObjectProtocol?
+    private var defaultDeviceAddress = AudioObjectPropertyAddress(
         mSelector: kAudioHardwarePropertyDefaultInputDevice,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain
+    )
+    private var deviceListAddress = AudioObjectPropertyAddress(
+        mSelector: kAudioHardwarePropertyDevices,
         mScope: kAudioObjectPropertyScopeGlobal,
         mElement: kAudioObjectPropertyElementMain
     )
@@ -347,39 +354,79 @@ final class AudioLevelMonitor: ObservableObject {
             namePtr
         )
 
-        let deviceName = nameStatus == noErr
+        let rawName = nameStatus == noErr
             ? namePtr.pointee as String? ?? "Unknown Device"
             : "Unknown Device"
+        let displayName = "System default (\(rawName))"
         DispatchQueue.main.async { [weak self] in
-            self?.inputDeviceName = deviceName
+            self?.inputDeviceName = displayName
         }
     }
 
     private func installDeviceChangeListener() {
-        guard !deviceListenerInstalled else { return }
+        let ptr = Unmanaged.passUnretained(self).toOpaque()
 
-        let status = AudioObjectAddPropertyListener(
-            AudioObjectID(kAudioObjectSystemObject),
-            &propertyAddress,
-            deviceChangeCallback,
-            Unmanaged.passUnretained(self).toOpaque()
-        )
+        // Listen for default input device changes
+        if !deviceListenerInstalled {
+            let status = AudioObjectAddPropertyListener(
+                AudioObjectID(kAudioObjectSystemObject),
+                &defaultDeviceAddress,
+                deviceChangeCallback,
+                ptr
+            )
+            if status == noErr { deviceListenerInstalled = true }
+        }
 
-        if status == noErr {
-            deviceListenerInstalled = true
+        // Listen for device connect/disconnect
+        if !deviceListListenerInstalled {
+            let status = AudioObjectAddPropertyListener(
+                AudioObjectID(kAudioObjectSystemObject),
+                &deviceListAddress,
+                deviceChangeCallback,
+                ptr
+            )
+            if status == noErr { deviceListListenerInstalled = true }
+        }
+
+        // Listen for audio engine configuration changes (route/format changes)
+        if configChangeObserver == nil {
+            configChangeObserver = NotificationCenter.default.addObserver(
+                forName: .AVAudioEngineConfigurationChange,
+                object: nil,
+                queue: nil
+            ) { [weak self] _ in
+                self?.handleDeviceChange()
+            }
         }
     }
 
     private func removeDeviceChangeListener() {
-        guard deviceListenerInstalled else { return }
+        let ptr = Unmanaged.passUnretained(self).toOpaque()
 
-        AudioObjectRemovePropertyListener(
-            AudioObjectID(kAudioObjectSystemObject),
-            &propertyAddress,
-            deviceChangeCallback,
-            Unmanaged.passUnretained(self).toOpaque()
-        )
-        deviceListenerInstalled = false
+        if deviceListenerInstalled {
+            AudioObjectRemovePropertyListener(
+                AudioObjectID(kAudioObjectSystemObject),
+                &defaultDeviceAddress,
+                deviceChangeCallback,
+                ptr
+            )
+            deviceListenerInstalled = false
+        }
+
+        if deviceListListenerInstalled {
+            AudioObjectRemovePropertyListener(
+                AudioObjectID(kAudioObjectSystemObject),
+                &deviceListAddress,
+                deviceChangeCallback,
+                ptr
+            )
+            deviceListListenerInstalled = false
+        }
+
+        if let observer = configChangeObserver {
+            NotificationCenter.default.removeObserver(observer)
+            configChangeObserver = nil
+        }
     }
 
     /// Called from device change callback. Debounces rapid notifications from CoreAudio.

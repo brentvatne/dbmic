@@ -12,6 +12,8 @@ struct PopoverView: View {
 
     @State private var showingSettings = false
     @State private var showingSoundCheck = false
+    @State private var showingPeakInfo = false
+    @State private var showingLevelInfo = false
 
     var thresholds: LevelThresholds {
         LevelThresholds(
@@ -66,15 +68,17 @@ struct PopoverView: View {
             Text("dBMic")
                 .font(.headline)
             Spacer()
-            if monitor.isSpeaking {
-                Text(LevelColors.label(for: monitor.decibelLevel, thresholds: thresholds))
-                    .font(.subheadline)
-                    .foregroundColor(LevelColors.color(for: monitor.decibelLevel, thresholds: thresholds))
-                    .fontWeight(.semibold)
-            } else if monitor.isMonitoring {
-                Text("Silent")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+            Group {
+                if monitor.isSpeaking {
+                    levelPill(
+                        LevelColors.label(for: monitor.decibelLevel, thresholds: thresholds),
+                        color: LevelColors.color(for: monitor.decibelLevel, thresholds: thresholds),
+                        fixedWidth: 60,
+                        fontSize: 10
+                    )
+                } else if monitor.isMonitoring {
+                    levelPill("Silent", color: .gray, fixedWidth: 60, fontSize: 10)
+                }
             }
         }
         .padding(.horizontal, 16)
@@ -95,6 +99,28 @@ struct PopoverView: View {
                 Text("dBFS")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.secondary)
+                Button {
+                    showingLevelInfo.toggle()
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .popover(isPresented: $showingLevelInfo) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("dBFS Level")
+                            .font(.headline)
+                        Text("dBFS (decibels relative to full scale) measures how loud your mic input is. 0 dBFS is the maximum — anything hitting 0 is clipping.")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                        Text("For calls and recording, aim for **-20 to -12 dBFS** during normal speech. Below -40 is too quiet; above -3 risks distortion.")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(width: 220)
+                    .padding()
+                }
             }
 
             // Level bar
@@ -122,14 +148,35 @@ struct PopoverView: View {
             HStack {
                 Text("Peak:")
                     .foregroundColor(.secondary)
-                Text(String(format: "%.1f dBFS", monitor.peakLevel))
-                    .foregroundColor(LevelColors.color(for: monitor.peakLevel, thresholds: thresholds))
-                Spacer()
-                if monitor.isSpeaking {
-                    Text("Speaking")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.green)
+                levelPill(
+                    String(format: "%.1f dBFS", monitor.peakLevel),
+                    color: LevelColors.color(for: monitor.peakLevel, thresholds: thresholds),
+                    fixedWidth: 72
+                )
+                Button {
+                    showingPeakInfo.toggle()
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
                 }
+                .buttonStyle(.borderless)
+                .popover(isPresented: $showingPeakInfo) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Peak Level")
+                            .font(.headline)
+                        Text("The highest volume level recorded since monitoring started. Useful for checking if your mic clips (hits 0 dBFS) during calls or recordings.")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                        Text("Click the peak pill to reset it.")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .italic()
+                    }
+                    .frame(width: 200)
+                    .padding()
+                }
+                Spacer()
             }
             .font(.system(size: 11))
         }
@@ -173,7 +220,7 @@ struct PopoverView: View {
 
             Spacer()
 
-            controlButton("Sound Check", systemImage: "waveform") {
+            controlButton("Test", systemImage: "waveform") {
                 showingSoundCheck.toggle()
             }
             .popover(isPresented: $showingSoundCheck) {
@@ -182,7 +229,7 @@ struct PopoverView: View {
 
             Spacer()
 
-            controlButton("Settings", systemImage: "gear") {
+            controlButton("Configure", systemImage: "gear") {
                 showingSettings.toggle()
             }
             .popover(isPresented: $showingSettings) {
@@ -213,6 +260,22 @@ struct PopoverView: View {
             .frame(width: 50)
         }
         .buttonStyle(.borderless)
+    }
+
+    // MARK: - Pill Badge
+
+    private func levelPill(_ text: String, color: Color, fixedWidth: CGFloat? = nil, fontSize: CGFloat = 11) -> some View {
+        Text(text)
+            .font(.system(size: fontSize, weight: .medium, design: .monospaced))
+            .foregroundColor(pillTextColor(for: color))
+            .frame(width: fixedWidth)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(color, in: Capsule())
+    }
+
+    private func pillTextColor(for bg: Color) -> Color {
+        bg == .yellow ? .black : .white
     }
 
     // MARK: - Helpers

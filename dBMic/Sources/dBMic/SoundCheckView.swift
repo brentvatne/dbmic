@@ -34,7 +34,7 @@ struct SoundCheckView: View {
                 .font(.system(size: 36))
                 .foregroundColor(.accentColor)
 
-            Text("Sound Check")
+            Text("Sound Test")
                 .font(.headline)
 
             Text("Speak at your normal volume for 5 seconds. dBMic will tell you if your level is good for calls.")
