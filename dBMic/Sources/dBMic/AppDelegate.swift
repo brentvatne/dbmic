@@ -15,27 +15,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSLog("[dBMic] applicationDidFinishLaunching")
-        // Menu-bar-only: hide Dock icon. This is the programmatic equivalent
-        // of Info.plist's LSUIElement=true, ensuring it works even when the
-        // binary runs outside a .app bundle (e.g. swift run, Xcode SPM).
-        NSApplication.shared.setActivationPolicy(.accessory)
-
         setupStatusItem()
         setupPopover()
         setupEventMonitor()
         setupRightClickMenu()
         requestPermissionAndStart()
-
-        // Close any windows macOS restored (the empty Settings scene window).
-        // Dispatched async so it runs after SwiftUI finishes creating its scenes.
-        DispatchQueue.main.async {
-            for window in NSApplication.shared.windows {
-                window.close()
-            }
-        }
-
-        NSLog("[dBMic] startup complete, isMonitoring=%d, permissionGranted=%d",
-              monitor.isMonitoring, monitor.permissionGranted)
     }
 
     // MARK: - Status Item
