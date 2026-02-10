@@ -168,10 +168,6 @@ struct PopoverView: View {
                         Text("The highest volume level recorded since monitoring started. Useful for checking if your mic clips (hits 0 dBFS) during calls or recordings.")
                             .font(.system(size: 12))
                             .foregroundColor(.secondary)
-                        Text("Click the peak pill to reset it.")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                            .italic()
                     }
                     .frame(width: 200)
                     .padding()
