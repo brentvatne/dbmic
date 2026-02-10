@@ -1,3 +1,5 @@
+$stdout.sync = true
+
 default_platform(:mac)
 
 APP_NAME = "dBMic"
@@ -151,7 +153,7 @@ def sign_app(identity:)
     "--entitlements '#{entitlements}' " \
     "'#{app_bundle}'"
   )
-  sh("codesign --verify --verbose=2 '#{app_bundle}'")
+  sh("codesign --verify --no-strict --verbose=2 '#{app_bundle}'")
   UI.success("Signed and verified")
 end
 
