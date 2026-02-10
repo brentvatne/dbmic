@@ -73,7 +73,8 @@ jobs:
       - name: Allow codesign to access keychain
         env:
           KEYCHAIN_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-        run: security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+        run: |
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
 
       - name: Build, sign, notarize, and package
         env:
