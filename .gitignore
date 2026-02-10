@@ -25,6 +25,9 @@ Package.resolved
 *.app
 *.dmg
 
+# Environment
+.env
+
 # Certificates and secrets
 *.p12
 *.cer
@@ -36,5 +39,5 @@ Package.resolved
 
 # Ruby / Fastlane
 vendor/bundle
-fastlane/report.xml
-fastlane/README.md
+**/fastlane/report.xml
+**/fastlane/README.md
