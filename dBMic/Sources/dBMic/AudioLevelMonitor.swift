@@ -2,7 +2,7 @@ import AVFoundation
 import Accelerate
 import Combine
 import CoreAudio
-import MicMeterCore
+import dBMicCore
 
 /// Monitors the system audio input device and publishes real-time dB levels.
 final class AudioLevelMonitor: ObservableObject {
@@ -334,18 +334,22 @@ final class AudioLevelMonitor: ObservableObject {
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-        var name: CFString = "" as CFString
-        var nameSize = UInt32(MemoryLayout<CFString>.size)
+        let namePtr = UnsafeMutablePointer<CFString?>.allocate(capacity: 1)
+        namePtr.initialize(to: nil)
+        defer { namePtr.deinitialize(count: 1); namePtr.deallocate() }
+        var nameSize = UInt32(MemoryLayout<CFString?>.size)
 
         let nameStatus = AudioObjectGetPropertyData(
             deviceID,
             &nameAddress,
             0, nil,
             &nameSize,
-            &name
+            namePtr
         )
 
-        let deviceName = nameStatus == noErr ? name as String : "Unknown Device"
+        let deviceName = nameStatus == noErr
+            ? namePtr.pointee as String? ?? "Unknown Device"
+            : "Unknown Device"
         DispatchQueue.main.async { [weak self] in
             self?.inputDeviceName = deviceName
         }

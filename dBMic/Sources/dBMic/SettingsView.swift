@@ -1,6 +1,6 @@
 import SwiftUI
 import ServiceManagement
-import MicMeterCore
+import dBMicCore
 
 /// Settings panel accessible from the popover.
 struct SettingsView: View {

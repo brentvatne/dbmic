@@ -1,5 +1,5 @@
 import SwiftUI
-import MicMeterCore
+import dBMicCore
 
 /// Pre-call sound check UI. Asks the user to speak for 5 seconds, then gives a verdict.
 struct SoundCheckView: View {
@@ -37,7 +37,7 @@ struct SoundCheckView: View {
             Text("Sound Check")
                 .font(.headline)
 
-            Text("Speak at your normal volume for 5 seconds. MicMeter will tell you if your level is good for calls.")
+            Text("Speak at your normal volume for 5 seconds. dBMic will tell you if your level is good for calls.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)

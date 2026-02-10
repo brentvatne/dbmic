@@ -1,5 +1,5 @@
 import SwiftUI
-import MicMeterCore
+import dBMicCore
 
 /// A sparkline graph showing the last 60 seconds of audio levels.
 struct HistoryGraphView: View {

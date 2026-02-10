@@ -13,7 +13,7 @@ struct PermissionView: View {
             Text("Microphone Access Required")
                 .font(.headline)
 
-            Text("MicMeter needs access to your microphone to display audio input levels.")
+            Text("dBMic needs access to your microphone to display audio input levels.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)

@@ -1,5 +1,5 @@
 import XCTest
-@testable import MicMeterCore
+@testable import dBMicCore
 
 #if canImport(SwiftUI)
 import SwiftUI

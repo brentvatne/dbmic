@@ -1,6 +1,6 @@
 import AppKit
 import Combine
-import MicMeterCore
+import dBMicCore
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -13,10 +13,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusCancellable: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSLog("[dBMic] applicationDidFinishLaunching")
+        // Menu-bar-only: hide Dock icon. This is the programmatic equivalent
+        // of Info.plist's LSUIElement=true, ensuring it works even when the
+        // binary runs outside a .app bundle (e.g. swift run, Xcode SPM).
+        NSApplication.shared.setActivationPolicy(.accessory)
+
         setupStatusItem()
+        if let button = statusItem.button {
+            NSLog("[dBMic] button frame=%@, bounds=%@",
+                  NSStringFromRect(button.frame), NSStringFromRect(button.bounds))
+            NSLog("[dBMic] hostingView frame=%@", NSStringFromRect(hostingView.frame))
+            NSLog("[dBMic] button subviews=%@", String(describing: button.subviews))
+        } else {
+            NSLog("[dBMic] WARNING: statusItem.button is nil")
+        }
         setupPopover()
         setupEventMonitor()
         requestPermissionAndStart()
+        NSLog("[dBMic] startup complete, isMonitoring=%d, permissionGranted=%d",
+              monitor.isMonitoring, monitor.permissionGranted)
     }
 
     // MARK: - Status Item

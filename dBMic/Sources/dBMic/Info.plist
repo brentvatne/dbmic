@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>MicMeter</string>
+    <string>dBMic</string>
     <key>CFBundleDisplayName</key>
-    <string>MicMeter</string>
+    <string>dBMic</string>
     <key>CFBundleIdentifier</key>
-    <string>com.micmeter.app</string>
+    <string>com.dbmic.app</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>
@@ -19,6 +19,6 @@
     <key>LSUIElement</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>MicMeter monitors your microphone input level to display the current decibel reading in the menu bar.</string>
+    <string>dBMic monitors your microphone input level to display the current decibel reading in the menu bar.</string>
 </dict>
 </plist>

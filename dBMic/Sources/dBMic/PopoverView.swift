@@ -1,5 +1,5 @@
 import SwiftUI
-import MicMeterCore
+import dBMicCore
 
 /// The popover shown when clicking the menu bar item.
 /// Displays a detailed level meter, device info, and controls.
@@ -63,7 +63,7 @@ struct PopoverView: View {
 
     private var headerSection: some View {
         HStack {
-            Text("MicMeter")
+            Text("dBMic")
                 .font(.headline)
             Spacer()
             if monitor.isSpeaking {

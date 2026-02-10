@@ -23,3 +23,18 @@ Package.resolved
 
 # App bundle
 *.app
+*.dmg
+
+# Certificates and secrets
+*.p12
+*.cer
+*.pem
+*.key
+*.certSigningRequest
+*.mobileprovision
+*.provisionprofile
+
+# Ruby / Fastlane
+vendor/bundle
+fastlane/report.xml
+fastlane/README.md

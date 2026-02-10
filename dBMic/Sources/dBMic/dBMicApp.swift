@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct MicMeterApp: App {
+struct dBMicApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {

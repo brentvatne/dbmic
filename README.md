@@ -1,4 +1,4 @@
-# MicMeter
+# dBMic
 
 A macOS menu bar app that monitors your microphone level in real time. Built for people who frequently get told "you're too quiet" on calls.
 
@@ -20,7 +20,7 @@ A macOS menu bar app that monitors your microphone level in real time. Built for
 ## Building
 
 ```bash
-cd MicMeter
+cd dBMic
 swift build
 swift run
 # or open in Xcode and hit Run
