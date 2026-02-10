@@ -268,6 +268,8 @@ struct PopoverView: View {
         Text(text)
             .font(.system(size: fontSize, weight: .medium, design: .monospaced))
             .foregroundColor(pillTextColor(for: color))
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
             .frame(width: fixedWidth)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)

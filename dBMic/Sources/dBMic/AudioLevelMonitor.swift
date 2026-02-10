@@ -357,7 +357,7 @@ final class AudioLevelMonitor: ObservableObject {
         let rawName = nameStatus == noErr
             ? namePtr.pointee as String? ?? "Unknown Device"
             : "Unknown Device"
-        let displayName = "System default (\(rawName))"
+        let displayName = "System (\(rawName))"
         DispatchQueue.main.async { [weak self] in
             self?.inputDeviceName = displayName
         }
