@@ -157,8 +157,10 @@ final class AudioLevelMonitor: ObservableObject {
 
     func stopMonitoring() {
         guard isMonitoring else { return }
-        audioEngine.inputNode.removeTap(onBus: 0)
+        // Stop engine first to release audio hardware, then remove the tap.
+        // Reversed order avoids contending with CoreAudio's device-change mutex.
         audioEngine.stop()
+        audioEngine.inputNode.removeTap(onBus: 0)
         historyTimer?.invalidate()
         historyTimer = nil
         // Set state synchronously to match startMonitoring
@@ -174,8 +176,22 @@ final class AudioLevelMonitor: ObservableObject {
     }
 
     func restartMonitoring() {
-        stopMonitoring()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+        // Lightweight stop: halt the engine without calling removeTap(onBus:).
+        // removeTap reconfigures the audio graph, which deadlocks with CoreAudio's
+        // internal device-change processing (both contend for the same mutex).
+        // startMonitoring() creates a fresh AVAudioEngine, so the old engine and
+        // its tap are cleaned up when the old instance is released.
+        if isMonitoring {
+            audioEngine.stop()
+            historyTimer?.invalidate()
+            historyTimer = nil
+            isMonitoring = false
+            isSpeaking = false
+            decibelLevel = -160.0
+            peakLevel = -160.0
+            currentSmoothedLevel = -160.0
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             self?.startMonitoring()
         }
     }
