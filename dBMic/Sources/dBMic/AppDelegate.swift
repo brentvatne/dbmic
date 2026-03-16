@@ -3,7 +3,7 @@ import Combine
 import dBMicCore
 import SwiftUI
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
@@ -12,6 +12,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var eventMonitor: Any?
     private var rightClickMonitor: Any?
     private var statusCancellable: AnyCancellable?
+    /// Invisible window used to anchor the popover at the correct screen position.
+    /// Works around an NSPopover bug where status item coordinates go stale after display changes.
+    private var popoverProxy: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSLog("[dBMic] applicationDidFinishLaunching")
@@ -46,9 +49,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.contentSize = NSSize(width: 280, height: 400)
         popover.behavior = .transient
         popover.animates = true
+        popover.delegate = self
 
         let popoverView = PopoverContentView(monitor: monitor)
         popover.contentViewController = NSHostingController(rootView: popoverView)
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        popoverProxy?.close()
+        popoverProxy = nil
     }
 
     @objc private func togglePopover(_ sender: AnyObject?) {
@@ -57,7 +66,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if popover.isShown {
             popover.performClose(sender)
         } else {
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            // Anchor the popover to an invisible proxy window placed at the button's
+            // current screen rect. This avoids stale coordinates from the status bar
+            // window that can cause the popover to drift after display changes.
+            guard let buttonWindow = button.window else { return }
+            let screenRect = buttonWindow.convertToScreen(
+                button.convert(button.bounds, to: nil)
+            )
+
+            popoverProxy?.close()
+            let proxy = NSWindow(
+                contentRect: screenRect,
+                styleMask: [.borderless],
+                backing: .buffered,
+                defer: false
+            )
+            proxy.isOpaque = false
+            proxy.backgroundColor = .clear
+            proxy.hasShadow = false
+            proxy.ignoresMouseEvents = true
+            proxy.level = .statusBar
+            proxy.orderFront(nil)
+            popoverProxy = proxy
+
+            popover.show(
+                relativeTo: proxy.contentView!.bounds,
+                of: proxy.contentView!,
+                preferredEdge: .minY
+            )
             popover.contentViewController?.view.window?.makeKey()
         }
     }
